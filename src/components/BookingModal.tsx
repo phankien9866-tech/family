@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Court, Booking, SystemConfig } from '../types';
 import { X, Calendar, Clock, Sparkles, CheckSquare, CreditCard, ShieldAlert } from 'lucide-react';
 import { addDoc, collection } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 
 interface BookingModalProps {
   court: Court;
@@ -201,6 +201,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     } catch (err: any) {
       console.error('Lỗi khi đặt sân:', err);
       setError('Đã xảy ra lỗi khi gửi yêu cầu. Vui lòng thử lại sau.');
+      handleFirestoreError(err, OperationType.CREATE, 'bookings');
     } finally {
       setIsLoading(false);
     }

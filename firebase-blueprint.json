@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "Court": {
+      "title": "Court",
+      "description": "Information about a pickleball court",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "type": { "type": "string" },
+        "amenities": { "type": "array" },
+        "pricing": { "type": "object" },
+        "services": { "type": "object" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "name", "address", "type"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "A booking slot record for a court",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "courtId": { "type": "string" },
+        "courtName": { "type": "string" },
+        "date": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "rentRackets": { "type": "boolean" },
+        "racketCount": { "type": "number" },
+        "rentBalls": { "type": "boolean" },
+        "ballCount": { "type": "number" },
+        "totalPrice": { "type": "number" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["courtId", "courtName", "date", "startTime", "endTime", "customerName", "customerPhone", "totalPrice", "status"]
+    },
+    "SystemConfig": {
+      "title": "SystemConfig",
+      "description": "Global settings configuration and credentials",
+      "type": "object",
+      "properties": {
+        "bankName": { "type": "string" },
+        "bankAccount": { "type": "string" },
+        "bankOwner": { "type": "string" },
+        "qrCodeUrl": { "type": "string" },
+        "adminPasswordHash": { "type": "string" },
+        "defaultRacketPrice": { "type": "number" },
+        "defaultBallPrice": { "type": "number" }
+      },
+      "required": ["bankName", "bankAccount", "bankOwner", "qrCodeUrl", "adminPasswordHash"]
+    }
+  },
+  "firestore": {
+    "courts/{courtId}": {
+      "schema": "Court",
+      "description": "Collection of available courts"
+    },
+    "bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Collection of all court bookings"
+    },
+    "config/{configId}": {
+      "schema": "SystemConfig",
+      "description": "System configuration documents"
+    }
+  }
+}

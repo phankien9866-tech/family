@@ -19,6 +19,43 @@ const db = initializeFirestore(app, {}, "ai-studio-281e5529-8b9c-47bf-8f84-623b0
 
 export { db };
 
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  }
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {},
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
 // Default Courts (Bản 2 chính xác bảng giá thực tế)
 export const DEFAULT_COURTS: Court[] = [
   {
@@ -90,5 +127,8 @@ export async function seedDatabaseIfEmpty() {
     }
   } catch (error) {
     console.error('Error seeding database:', error);
+    handleFirestoreError(error, OperationType.WRITE, 'courts');
   }
 }
+// Workspace trigger comment for snapshot sync
+

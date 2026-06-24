@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Court, Booking, SystemConfig } from './types';
-import { db, seedDatabaseIfEmpty, DEFAULT_CONFIG } from './firebase';
+import { db, seedDatabaseIfEmpty, DEFAULT_CONFIG, handleFirestoreError, OperationType } from './firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { CourtCard } from './components/CourtCard';
 import { BookingModal } from './components/BookingModal';
@@ -95,6 +95,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Failed to sync with Cloud Firestore:', error);
+      handleFirestoreError(error, OperationType.GET, 'courts');
     }
   };
 

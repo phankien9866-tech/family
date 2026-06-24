@@ -7,7 +7,7 @@ import {
 import { 
   collection, getDocs, doc, updateDoc, deleteDoc, addDoc, setDoc 
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 
 interface AdminPanelProps {
   courts: Court[];
@@ -100,6 +100,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch (err) {
       console.error(err);
       triggerAlert('error', 'Lỗi khi duyệt đơn đặt sân.');
+      handleFirestoreError(err, OperationType.UPDATE, `bookings/${bookingId}`);
     } finally {
       setActionLoadingId(null);
     }
@@ -117,6 +118,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch (err) {
       console.error(err);
       triggerAlert('error', 'Lỗi khi hủy đơn đặt sân.');
+      handleFirestoreError(err, OperationType.UPDATE, `bookings/${bookingId}`);
     } finally {
       setActionLoadingId(null);
     }
@@ -136,6 +138,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch (err) {
       console.error(err);
       triggerAlert('error', 'Lỗi khi xóa đơn đặt sân.');
+      handleFirestoreError(err, OperationType.DELETE, `bookings/${bookingId}`);
     } finally {
       setActionLoadingId(null);
     }
@@ -220,6 +223,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch (err) {
       console.error(err);
       triggerAlert('error', 'Gặp lỗi trong quá trình lưu thông tin sân.');
+      handleFirestoreError(err, editingCourt ? OperationType.UPDATE : OperationType.CREATE, editingCourt ? `courts/${editingCourt.id}` : 'courts');
     } finally {
       setGeneralLoading(false);
     }
@@ -239,6 +243,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch (err) {
       console.error(err);
       triggerAlert('error', 'Gặp lỗi khi xóa sân.');
+      handleFirestoreError(err, OperationType.DELETE, `courts/${courtId}`);
     } finally {
       setGeneralLoading(false);
     }
@@ -285,6 +290,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch (err) {
       console.error(err);
       triggerAlert('error', 'Lỗi khi lưu cấu hình hệ thống.');
+      handleFirestoreError(err, OperationType.WRITE, 'config/system');
     } finally {
       setGeneralLoading(false);
     }
