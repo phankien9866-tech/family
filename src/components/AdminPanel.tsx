@@ -203,12 +203,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       };
 
       if (editingCourt) {
-        // Edit court
+        // Edit court - use updateDoc
         const courtRef = doc(db, 'courts', editingCourt.id);
-        await setDoc(courtRef, { ...courtData, id: editingCourt.id });
+        await updateDoc(courtRef, courtData);
         triggerAlert('success', 'Đã cập nhật thông tin sân thành công!');
       } else {
-        // Add new court
+        // Add new court - use addDoc
         const newDocRef = await addDoc(collection(db, 'courts'), courtData);
         // Save ID as well
         await updateDoc(newDocRef, { id: newDocRef.id });
@@ -276,7 +276,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         defaultBallPrice: systemConfig.defaultBallPrice || 30000
       };
 
-      await setDoc(doc(db, 'config', 'system'), updatedConfig);
+      await setDoc(doc(db, 'config', 'system'), updatedConfig, { merge: true });
       await onRefreshData();
       
       setNewPassword('');
