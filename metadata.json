@@ -1,0 +1,6 @@
+{
+  "name": "Quản lý và Đặt sân Pickleball",
+  "description": "Hệ thống quản lý và đặt sân Pickleball chuyên nghiệp, hỗ trợ tính tiền giờ thông minh theo bảng giá thực tế, quản lý đơn đặt lịch và cấu hình hệ thống đồng bộ Cloud qua Firebase.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
