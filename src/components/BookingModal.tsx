@@ -45,8 +45,9 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [startHour, setStartHour] = useState('17:00');
   const [endHour, setEndHour] = useState('19:00');
 
-  // Pricing Options (depending on court and lighting)
-  const [pricingOption, setPricingOption] = useState<string>('');
+  // Automatically computed split durations (day vs night)
+  const [calculatedDayHours, setCalculatedDayHours] = useState(0);
+  const [calculatedNightHours, setCalculatedNightHours] = useState(0);
 
   // Extra services
   const [hasRackets, setHasRackets] = useState(false);
@@ -61,25 +62,16 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
   const isIndoor = court.id === 'court-1' || court.type === 'trong_nha';
 
-  // Available pricing strategies list for UI presentation and selection
-  const pricingOptions = isIndoor
+  // Display-only reference pricing list for sidebar presentation
+  const pricingOptionsDisplay = isIndoor
     ? [
-        { id: 'day', label: 'Không dùng đèn (Giờ ban ngày)', rate: court.pricing.dayRate },
-        { id: 'fixed_day', label: 'Có đèn - Cố định (5h - 17h)', rate: court.pricing.fixedLightDay || 80000 },
-        { id: 'fixed_night', label: 'Có đèn - Cố định (17h - 22h)', rate: court.pricing.fixedLightNight || 100000 },
-        { id: 'custom', label: 'Có đèn - Khách thuê lẻ', rate: court.pricing.customLightRate || 120000 }
+        { id: 'day', label: 'Không dùng đèn (Ban ngày)', rate: court.pricing.dayRate },
+        { id: 'custom', label: 'Thuê lẻ có dùng đèn (17h - 22h)', rate: court.pricing.customLightRate || court.pricing.nightRate || 120000 }
       ]
     : [
-        { id: 'day', label: 'Không dùng đèn (Giờ ban ngày)', rate: court.pricing.dayRate },
-        { id: 'night', label: 'Có đèn chiếu sáng tối', rate: court.pricing.nightRate }
+        { id: 'day', label: 'Không dùng đèn (Ban ngày)', rate: court.pricing.dayRate },
+        { id: 'night', label: 'Khung giờ dùng đèn tối', rate: court.pricing.nightRate }
       ];
-
-  // Set default pricing option on load
-  useEffect(() => {
-    if (pricingOptions.length > 0) {
-      setPricingOption(pricingOptions[0].id);
-    }
-  }, [court]);
 
   // Generate date list for Repeating schedule
   useEffect(() => {
@@ -105,32 +97,48 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     }
   }, [bookingType, singleDate, startDate, endDate, selectedWeekdays]);
 
-  // Calculate total amount
+  // Calculate total amount automatically based on selected timeslot
   useEffect(() => {
     // 1. Calculate duration in hours
     const [startH, startM] = startHour.split(':').map(Number);
     const [endH, endM] = endHour.split(':').map(Number);
     
-    let hours = (endH + endM / 60) - (startH + startM / 60);
-    if (hours <= 0) hours = 0;
-
-    // 2. Find selected rate
-    const selectedObj = pricingOptions.find(opt => opt.id === pricingOption);
-    const hourlyRate = selectedObj ? selectedObj.rate : court.pricing.dayRate;
-
-    // 3. Multiplied by dates count and services
-    const datesCount = calculatedDates.length;
-    if (datesCount === 0 || hours <= 0) {
+    const startDec = startH + startM / 60;
+    const endDec = endH + endM / 60;
+    let hours = endDec - startDec;
+    if (hours <= 0) {
+      setCalculatedDayHours(0);
+      setCalculatedNightHours(0);
       setTotalPrice(0);
       return;
     }
 
-    const courtCost = hourlyRate * hours * datesCount;
+    // Determine rates
+    const dayRate = court.pricing.dayRate;
+    const nightRate = court.pricing.customLightRate || court.pricing.nightRate || 120000;
+
+    // Overlap with nighttime (17:00 - 22:00)
+    const overlapStart = Math.max(startDec, 17);
+    const overlapEnd = Math.min(endDec, 22);
+    const nightHrs = Math.max(0, overlapEnd - overlapStart);
+    const dayHrs = Math.max(0, hours - nightHrs);
+
+    setCalculatedDayHours(dayHrs);
+    setCalculatedNightHours(nightHrs);
+
+    // Multiplied by dates count and services
+    const datesCount = calculatedDates.length;
+    if (datesCount === 0) {
+      setTotalPrice(0);
+      return;
+    }
+
+    const courtCost = ((dayHrs * dayRate) + (nightHrs * nightRate)) * datesCount;
     const racketCost = hasRackets ? (court.services.racketRentPrice * datesCount) : 0;
     const ballCost = hasBalls ? (court.services.ballRentPrice * datesCount) : 0;
 
     setTotalPrice(courtCost + racketCost + ballCost);
-  }, [pricingOption, startHour, endHour, calculatedDates, hasRackets, hasBalls, pricingOption]);
+  }, [startHour, endHour, calculatedDates, hasRackets, hasBalls, court]);
 
   const toggleWeekday = (day: number) => {
     if (selectedWeekdays.includes(day)) {
@@ -252,7 +260,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             <div className="border-t border-slate-200 pt-3">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Bảng giá tham chiếu</span>
               <div className="flex flex-col gap-2">
-                {pricingOptions.map((opt) => (
+                {pricingOptionsDisplay.map((opt) => (
                   <div key={opt.id} className="flex justify-between items-center bg-white p-2.5 rounded-lg border border-slate-100 shadow-2xs">
                     <span className="text-xs text-slate-600 font-medium line-clamp-2 pr-1">{opt.label}</span>
                     <span className="text-xs font-bold text-slate-900 shrink-0">{formatVND(opt.rate)}/h</span>
@@ -425,41 +433,53 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               </div>
             )}
 
-            {/* Time slot & Pricing Option */}
+            {/* Time slot & Automatic Pricing Calculation */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Giờ chơi</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Giờ chơi <span className="text-red-500">*</span></label>
                 <div className="grid grid-cols-2 gap-2">
-                  <input 
-                    type="time"
-                    required
-                    value={startHour}
-                    onChange={(e) => setStartHour(e.target.value)}
-                    className="px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800"
-                  />
-                  <input 
-                    type="time"
-                    required
-                    value={endHour}
-                    onChange={(e) => setEndHour(e.target.value)}
-                    className="px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800"
-                  />
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-medium text-slate-400">Giờ bắt đầu</span>
+                    <input 
+                      type="time"
+                      required
+                      value={startHour}
+                      onChange={(e) => setStartHour(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-medium text-slate-400">Giờ kết thúc</span>
+                    <input 
+                      type="time"
+                      required
+                      value={endHour}
+                      onChange={(e) => setEndHour(e.target.value)}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 focus:border-indigo-500 focus:outline-hidden"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Tính tiền theo khung giờ</label>
-                <select
-                  value={pricingOption}
-                  onChange={(e) => setPricingOption(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white text-slate-800"
-                >
-                  {pricingOptions.map((opt) => (
-                    <option key={opt.id} value={opt.id}>
-                      {opt.label} ({formatVND(opt.rate)}/h)
-                    </option>
-                  ))}
-                </select>
+              <div className="bg-indigo-50/50 p-3.5 rounded-xl border border-indigo-100 flex flex-col justify-center">
+                <span className="block text-xs font-bold text-indigo-700 uppercase mb-1.5">Tự động tính khung giờ</span>
+                <div className="flex flex-col gap-1 text-xs text-slate-700">
+                  {calculatedDayHours > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span>Giờ ban ngày:</span>
+                      <span className="font-bold text-slate-900">{calculatedDayHours.toFixed(1).replace('.0', '')}h x {formatVND(court.pricing.dayRate)}/h</span>
+                    </div>
+                  )}
+                  {calculatedNightHours > 0 && (
+                    <div className="flex justify-between items-center">
+                      <span>Giờ có đèn (17h - 22h):</span>
+                      <span className="font-bold text-slate-900">{calculatedNightHours.toFixed(1).replace('.0', '')}h x {formatVND(court.pricing.customLightRate || court.pricing.nightRate || 120000)}/h</span>
+                    </div>
+                  )}
+                  {calculatedDayHours === 0 && calculatedNightHours === 0 && (
+                    <span className="text-[11px] text-slate-400 italic">Nhập giờ chơi hợp lệ để xem chi tiết tính tiền...</span>
+                  )}
+                </div>
               </div>
             </div>
 
