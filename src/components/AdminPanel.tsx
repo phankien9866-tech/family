@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Court, Booking, SystemConfig } from '../types';
 import { 
   Check, X, Plus, Edit, Trash2, Key, Settings, CreditCard, 
-  MapPin, CheckSquare, Layers, Lock, ShieldCheck, RefreshCw, ChevronDown, Zap, Calendar, Clock
+  MapPin, CheckSquare, Layers, Lock, ShieldCheck, RefreshCw, ChevronDown, Zap, Calendar, Clock,
+  Mail, AlertCircle
 } from 'lucide-react';
 import { 
   collection, doc, updateDoc, deleteDoc, addDoc, setDoc 
@@ -25,6 +26,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  // Forgot password states
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [forgotPasswordLoading, setForgotPasswordLoading] = useState(false);
+  const [forgotPasswordStatus, setForgotPasswordStatus] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [showPasswordInline, setShowPasswordInline] = useState(false);
   
   // Tab control: 'bookings' | 'courts' | 'settings'
   const [activeTab, setActiveTab] = useState<'bookings' | 'courts' | 'settings'>('bookings');
@@ -77,6 +84,46 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       triggerAlert('success', 'Đăng nhập trang quản trị thành công!');
     } else {
       setLoginError('Mật khẩu quản trị viên không chính xác. Vui lòng thử lại.');
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setForgotPasswordLoading(true);
+    setForgotPasswordStatus(null);
+    try {
+      const correctPassword = systemConfig.adminPassword || 'admin';
+      const email = 'phankien386@gmail.com';
+      
+      const response = await fetch(`https://formsubmit.co/ajax/${email}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          _subject: 'Yêu cầu cấp lại mật khẩu Quản trị Sân Pickleball',
+          _captcha: 'false',
+          message: `Xin chào,\n\nHệ thống đặt sân Pickleball vừa nhận được yêu cầu cấp lại mật khẩu quản trị từ bạn.\n\nMật khẩu quản trị viên hiện tại của bạn là: ${correctPassword}\n\nChúc bạn quản lý sân chơi vui vẻ và thành công!\nTrân trọng.`,
+          _template: 'table'
+        })
+      });
+
+      if (response.ok) {
+        setForgotPasswordStatus({
+          type: 'success',
+          text: 'Đã gửi thành công! Vui lòng kiểm tra email phankien386@gmail.com (bao gồm cả thư rác / spam).'
+        });
+      } else {
+        throw new Error('Gửi mail qua FormSubmit thất bại.');
+      }
+    } catch (err) {
+      console.error(err);
+      setForgotPasswordStatus({
+        type: 'error',
+        text: 'Không thể kết nối đến máy chủ gửi thư. Bạn có thể nhấn nút "Hiện mật khẩu trực tiếp" bên dưới để lấy ngay mật khẩu.'
+      });
+    } finally {
+      setForgotPasswordLoading(false);
     }
   };
 
@@ -289,7 +336,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
         <form onSubmit={handleAdminLogin} className="p-6 flex flex-col gap-4">
           <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Mật khẩu Quản trị</label>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="block text-xs font-bold text-slate-500 uppercase">Mật khẩu Quản trị</label>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgotModalOpen(true);
+                  setForgotPasswordStatus(null);
+                  setShowPasswordInline(false);
+                }}
+                className="text-xs font-semibold text-indigo-600 hover:text-indigo-850 hover:underline cursor-pointer focus:outline-hidden"
+              >
+                Quên mật khẩu?
+              </button>
+            </div>
             <input 
               type="password"
               required
@@ -307,6 +367,68 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             Đăng Nhập
           </button>
         </form>
+
+        {/* FORGOT PASSWORD MODAL */}
+        {isForgotModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-55 overflow-y-auto" id="forgot-password-modal">
+            <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 flex flex-col">
+              <div className="bg-indigo-600 p-5 text-white flex justify-between items-center shrink-0">
+                <h3 className="font-extrabold text-sm md:text-base tracking-tight flex items-center gap-2">
+                  <Key className="w-5 h-5 text-indigo-100" />
+                  <span>QUÊN MẬT KHẨU QUẢN TRỊ</span>
+                </h3>
+                <button 
+                  type="button" 
+                  onClick={() => setIsForgotModalOpen(false)} 
+                  className="text-indigo-100 hover:text-white cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 flex flex-col gap-4">
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Hệ thống hỗ trợ gửi lại thông tin mật khẩu quản trị viên về địa chỉ hòm thư email chính chủ của bạn:
+                </p>
+                
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60 flex items-center gap-2.5">
+                  <Mail className="w-4 h-4 text-indigo-500" />
+                  <span className="text-xs font-bold text-slate-800">phankien386@gmail.com</span>
+                </div>
+
+                {forgotPasswordStatus && (
+                  <div className={`p-4 rounded-xl border text-xs leading-relaxed font-semibold ${
+                    forgotPasswordStatus.type === 'success' 
+                      ? 'bg-emerald-50 border-emerald-100 text-emerald-800' 
+                      : 'bg-rose-50 border-rose-100 text-rose-800'
+                  }`}>
+                    {forgotPasswordStatus.text}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  disabled={forgotPasswordLoading}
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white font-bold rounded-xl shadow-md transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                >
+                  <Mail className="w-4 h-4" />
+                  <span>{forgotPasswordLoading ? 'Đang gửi email...' : 'Gửi mật khẩu về email'}</span>
+                </button>
+              </div>
+
+              <div className="bg-slate-50 p-4 border-t border-slate-100 flex justify-end shrink-0">
+                <button 
+                  type="button" 
+                  onClick={() => setIsForgotModalOpen(false)} 
+                  className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-500 border border-slate-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
