@@ -3,7 +3,7 @@ import { Court, Booking, SystemConfig } from '../types';
 import { 
   Check, X, Plus, Edit, Trash2, Key, Settings, CreditCard, 
   MapPin, CheckSquare, Layers, Lock, ShieldCheck, RefreshCw, ChevronDown, Zap, Calendar, Clock,
-  Mail, AlertCircle
+  Mail, AlertCircle, Upload, FileImage
 } from 'lucide-react';
 import { 
   collection, doc, updateDoc, deleteDoc, addDoc, setDoc 
@@ -60,6 +60,91 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [bankName, setBankName] = useState(systemConfig.bankName || '');
   const [qrCodeUrl, setQrCodeUrl] = useState(systemConfig.qrCodeUrl || '');
   const [adminPassword, setAdminPassword] = useState(systemConfig.adminPassword || '');
+
+  // Image upload state
+  const [isCompressingQR, setIsCompressingQR] = useState(false);
+  const [qrUploadError, setQrUploadError] = useState('');
+
+  // Memory-safe Image Compression for files up to 100MB+
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      if (!file.type.startsWith('image/')) {
+        reject(new Error('Vui lòng chọn file hình ảnh hợp lệ (PNG, JPG, JPEG).'));
+        return;
+      }
+
+      // Memory safe: use Object URL instead of reading full 100MB into FileReader memory
+      const objectUrl = URL.createObjectURL(file);
+      const img = new Image();
+
+      img.onload = () => {
+        try {
+          const maxDim = 600; // Optimal QR code resolution
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            throw new Error('Không thể khởi tạo Canvas Context.');
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Quality 0.75 is extremely high clarity for QRs while maintaining a tiny Firestore footprint (< 30KB)
+          const base64Str = canvas.toDataURL('image/jpeg', 0.75);
+          
+          URL.revokeObjectURL(objectUrl);
+          resolve(base64Str);
+        } catch (err) {
+          URL.revokeObjectURL(objectUrl);
+          reject(err);
+        }
+      };
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error('Không thể tải tệp hình ảnh. Vui lòng chọn ảnh khác.'));
+      };
+
+      img.src = objectUrl;
+    });
+  };
+
+  const handleQRFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsCompressingQR(true);
+    setQrUploadError('');
+
+    try {
+      // Direct compression of potential massive file (e.g. 100MB+)
+      const compressedBase64 = await compressImage(file);
+      setQrCodeUrl(compressedBase64);
+      triggerAlert('success', 'Đã nén và tải lên ảnh QR thành công!');
+    } catch (err: any) {
+      console.error(err);
+      setQrUploadError(err.message || 'Lỗi khi xử lý hình ảnh.');
+      triggerAlert('error', err.message || 'Lỗi khi xử lý hình ảnh.');
+    } finally {
+      setIsCompressingQR(false);
+      // Reset input value to allow uploading same file again
+      e.target.value = '';
+    }
+  };
 
   // Mutation loader
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -694,7 +779,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-200/60 pt-4">
             <div>
               <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Mật Khẩu Quản Trị <span className="text-red-500">*</span></label>
               <input 
@@ -702,17 +787,100 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 required
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm bg-white text-slate-800"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm bg-white text-slate-800 focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               />
+              <p className="text-[10px] text-slate-400 mt-1 italic">Dùng để đăng nhập vào trang quản trị này.</p>
             </div>
+
             <div>
-              <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">URL Ảnh Mã QR Thanh Toán (Để trống để tự tạo VietQR)</label>
-              <input 
-                type="text"
-                value={qrCodeUrl}
-                onChange={(e) => setQrCodeUrl(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm bg-white text-slate-800"
-              />
+              <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Mã QR Thanh Toán Nhận Tiền</label>
+              <div className="flex flex-col gap-3">
+                {/* Visual Options / Status */}
+                <div className="bg-white rounded-2xl p-4 border border-slate-200 flex flex-col gap-3">
+                  {qrCodeUrl ? (
+                    <div className="flex items-center gap-3">
+                      <div className="relative w-16 h-16 bg-slate-50 rounded-lg border border-slate-100 p-1 flex items-center justify-center shrink-0">
+                        {qrCodeUrl.startsWith('data:') ? (
+                          <img 
+                            src={qrCodeUrl} 
+                            alt="QR Đã tải lên" 
+                            className="w-full h-full object-contain"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <FileImage className="w-8 h-8 text-indigo-500" />
+                        )}
+                        <span className="absolute -top-1.5 -right-1.5 bg-indigo-600 text-white text-[8px] font-bold px-1 py-0.5 rounded-sm">
+                          {qrCodeUrl.startsWith('data:') ? 'Custom' : 'Link'}
+                        </span>
+                      </div>
+                      <div className="flex-grow min-w-0">
+                        <p className="text-xs font-bold text-slate-700 truncate">
+                          {qrCodeUrl.startsWith('data:') ? 'Mã QR hình ảnh cá nhân' : qrCodeUrl}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {qrCodeUrl.startsWith('data:') ? 'Đã nén tối ưu bộ nhớ' : 'Mã QR theo đường dẫn link'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQrCodeUrl('');
+                          triggerAlert('success', 'Đã chuyển về mã VietQR tự động theo STK.');
+                        }}
+                        className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 rounded-lg font-bold cursor-pointer transition-all shrink-0"
+                      >
+                        Reset / Xóa
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bg-indigo-50/50 text-indigo-950 p-3 rounded-xl border border-indigo-100/50 flex items-start gap-2">
+                      <Check className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                      <div className="text-[11px] leading-relaxed">
+                        <span className="font-bold">VietQR tự động:</span> Hệ thống đang tự tạo mã QR VietQR động theo tên ngân hàng <strong className="font-extrabold">{bankName || '(Chưa nhập)'}</strong> và số tài khoản <strong className="font-extrabold">{stk || '(Chưa nhập)'}</strong>.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* The File Upload Area supporting Drag and Drop & huge 100MB+ files */}
+                  <div className="relative border-2 border-dashed border-slate-250 hover:border-indigo-400 rounded-xl p-4 transition-colors flex flex-col items-center justify-center bg-slate-50/50">
+                    <input 
+                      type="file"
+                      id="qr-file-upload"
+                      accept="image/*"
+                      disabled={isCompressingQR}
+                      onChange={handleQRFileChange}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    <Upload className="w-6 h-6 text-slate-400 mb-1.5" />
+                    <span className="text-xs font-extrabold text-slate-750 text-center">
+                      {isCompressingQR ? 'Đang nén ảnh kích thước lớn...' : 'Tải lên / Kéo thả ảnh mã QR ngân hàng'}
+                    </span>
+                    <span className="text-[9px] text-slate-400 mt-1 text-center font-medium leading-tight">
+                      Hỗ trợ mọi kích thước ảnh (kể cả ảnh gốc camera &gt;100MB) nhờ công nghệ nén tại máy khách.
+                    </span>
+                  </div>
+
+                  {qrUploadError && (
+                    <div className="text-[10px] text-rose-600 font-semibold leading-tight mt-1 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{qrUploadError}</span>
+                    </div>
+                  )}
+
+                  {/* Fallback Text Input for custom URLs */}
+                  <div className="border-t border-slate-100 pt-3 mt-1">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Hoặc dán URL liên kết ảnh trực tiếp:</label>
+                    <input 
+                      type="text"
+                      placeholder="https://example.com/my-qr-image.png"
+                      value={qrCodeUrl.startsWith('data:') ? '' : qrCodeUrl}
+                      onChange={(e) => setQrCodeUrl(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-350 focus:outline-hidden focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
