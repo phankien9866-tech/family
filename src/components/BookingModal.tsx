@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Court, Booking, SystemConfig } from '../types';
-import { X, Calendar, Clock, Sparkles, CheckSquare, CreditCard, ShieldAlert } from 'lucide-react';
-import { addDoc, collection } from 'firebase/firestore';
+import { X, Calendar, Clock, Sparkles, CheckSquare, CreditCard, ShieldAlert, Zap } from 'lucide-react';
+import { addDoc, collection, doc, updateDoc } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 
 interface BookingModalProps {
@@ -21,9 +21,12 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 }) => {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [bookingType, setBookingType] = useState<'once' | 'fixed'>('once');
+  const [bookingType, setBookingType] = useState<'retail' | 'fixed'>('retail');
   
-  // For 'once' (Đặt một lần)
+  // Active lamp request state ("Yêu cầu bật đèn sân")
+  const [isLightRequired, setIsLightRequired] = useState(false);
+
+  // For 'retail' (Đặt lẻ một lần)
   const [singleDate, setSingleDate] = useState(() => {
     const today = new Date();
     return today.toISOString().split('T')[0];
@@ -45,10 +48,6 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [startHour, setStartHour] = useState('17:00');
   const [endHour, setEndHour] = useState('19:00');
 
-  // Automatically computed split durations (day vs night)
-  const [calculatedDayHours, setCalculatedDayHours] = useState(0);
-  const [calculatedNightHours, setCalculatedNightHours] = useState(0);
-
   // Extra services
   const [hasRackets, setHasRackets] = useState(false);
   const [hasBalls, setHasBalls] = useState(false);
@@ -60,22 +59,17 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const isIndoor = court.id === 'court-1' || court.type === 'trong_nha';
+  // Restored full reference pricing table (left column)
+  const pricingOptionsDisplay = [
+    { id: 'priceDay', label: 'Không dùng đèn (Ban ngày)', rate: court.priceDay },
+    { id: 'priceFixedDay', label: 'Có đèn - Cố định (5h - 17h)', rate: court.priceFixedDay },
+    { id: 'priceFixedNight', label: 'Có đèn - Cố định (17h - 22h)', rate: court.priceFixedNight },
+    { id: 'priceRetailNight', label: 'Có đèn - Khách thuê lẻ (17h - 22h)', rate: court.priceRetailNight }
+  ];
 
-  // Display-only reference pricing list for sidebar presentation
-  const pricingOptionsDisplay = isIndoor
-    ? [
-        { id: 'day', label: 'Không dùng đèn (Ban ngày)', rate: court.pricing.dayRate },
-        { id: 'custom', label: 'Thuê lẻ có dùng đèn (17h - 22h)', rate: court.pricing.customLightRate || court.pricing.nightRate || 120000 }
-      ]
-    : [
-        { id: 'day', label: 'Không dùng đèn (Ban ngày)', rate: court.pricing.dayRate },
-        { id: 'night', label: 'Khung giờ dùng đèn tối', rate: court.pricing.nightRate }
-      ];
-
-  // Generate date list for Repeating schedule
+  // Generate date list for repeating schedules
   useEffect(() => {
-    if (bookingType === 'once') {
+    if (bookingType === 'retail') {
       setCalculatedDates([singleDate]);
     } else {
       const dates: string[] = [];
@@ -86,7 +80,6 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         let current = new Date(start);
         while (current <= end) {
           const dayOfWeek = current.getDay(); // 0 is Sunday, 1 is Monday...
-          // Map JS getDay() [0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat]
           if (selectedWeekdays.includes(dayOfWeek)) {
             dates.push(current.toISOString().split('T')[0]);
           }
@@ -99,46 +92,67 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
   // Calculate total amount automatically based on selected timeslot
   useEffect(() => {
-    // 1. Calculate duration in hours
+    // Parse hours to minutes
     const [startH, startM] = startHour.split(':').map(Number);
     const [endH, endM] = endHour.split(':').map(Number);
     
-    const startDec = startH + startM / 60;
-    const endDec = endH + endM / 60;
-    let hours = endDec - startDec;
-    if (hours <= 0) {
-      setCalculatedDayHours(0);
-      setCalculatedNightHours(0);
+    const startMinutes = startH * 60 + startM;
+    const endMinutes = endH * 60 + endM;
+    
+    const durationMinutes = endMinutes - startMinutes;
+    if (durationMinutes <= 0) {
       setTotalPrice(0);
       return;
     }
 
-    // Determine rates
-    const dayRate = court.pricing.dayRate;
-    const nightRate = court.pricing.customLightRate || court.pricing.nightRate || 120000;
+    // Single session hour cost calculation
+    let sessionCost = 0;
 
-    // Overlap with nighttime (17:00 - 22:00)
-    const overlapStart = Math.max(startDec, 17);
-    const overlapEnd = Math.min(endDec, 22);
-    const nightHrs = Math.max(0, overlapEnd - overlapStart);
-    const dayHrs = Math.max(0, hours - nightHrs);
+    // Loop through each minute to apply the exact rate and avoid any precision loss
+    for (let m = startMinutes; m < endMinutes; m++) {
+      const currentHour = Math.floor(m / 60);
+      
+      if (!isLightRequired) {
+        // NẾU KHÁCH KHÔNG TÍCH CHỌN BẬT ĐÈN: Tất cả đều áp dụng giá sàn đồng giá priceDay
+        sessionCost += court.priceDay / 60;
+      } else {
+        // NẾU KHÁCH CÓ TÍCH CHỌN BẬT ĐÈN
+        if (bookingType === 'retail') {
+          // Khách đặt lẻ một lần:
+          // Trước 18:00 (Ban ngày): áp dụng priceDay
+          // Từ 18:00 trở đi (Ban đêm): áp dụng priceRetailNight
+          if (currentHour < 18) {
+            sessionCost += court.priceDay / 60;
+          } else {
+            sessionCost += court.priceRetailNight / 60;
+          }
+        } else {
+          // Đặt lịch cố định:
+          // Trước 17:00 (Ban ngày): áp dụng priceFixedDay
+          // Từ 17:00 - 22:00 (Ban đêm): áp dụng priceFixedNight
+          if (currentHour < 17) {
+            sessionCost += court.priceFixedDay / 60;
+          } else {
+            sessionCost += court.priceFixedNight / 60;
+          }
+        }
+      }
+    }
 
-    setCalculatedDayHours(dayHrs);
-    setCalculatedNightHours(nightHrs);
+    // Round the single session cost to nearest integer (to avoid small float accumulation)
+    const roundedSessionCost = Math.round(sessionCost);
 
-    // Multiplied by dates count and services
     const datesCount = calculatedDates.length;
     if (datesCount === 0) {
       setTotalPrice(0);
       return;
     }
 
-    const courtCost = ((dayHrs * dayRate) + (nightHrs * nightRate)) * datesCount;
-    const racketCost = hasRackets ? (court.services.racketRentPrice * datesCount) : 0;
-    const ballCost = hasBalls ? (court.services.ballRentPrice * datesCount) : 0;
+    const racketCost = hasRackets ? (court.priceRentalRack * datesCount) : 0;
+    const ballCost = hasBalls ? (court.priceRentalBall * datesCount) : 0;
 
-    setTotalPrice(courtCost + racketCost + ballCost);
-  }, [startHour, endHour, calculatedDates, hasRackets, hasBalls, court]);
+    setTotalPrice((roundedSessionCost * datesCount) + racketCost + ballCost);
+  }, [bookingType, startHour, endHour, isLightRequired, calculatedDates, hasRackets, hasBalls, court]);
 
   const toggleWeekday = (day: number) => {
     if (selectedWeekdays.includes(day)) {
@@ -165,7 +179,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
     const [startH, startM] = startHour.split(':').map(Number);
     const [endH, endM] = endHour.split(':').map(Number);
-    if ((endH + endM / 60) <= (startH + startM / 60)) {
+    if ((endH * 60 + endM) <= (startH * 60 + startM)) {
       setError('Giờ kết thúc phải lớn hơn giờ bắt đầu.');
       return;
     }
@@ -178,32 +192,32 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     setIsLoading(true);
 
     try {
-      // Create new booking object
+      // Assemble standard services list
+      const servicesSelected: ('rack' | 'ball')[] = [];
+      if (hasRackets) servicesSelected.push('rack');
+      if (hasBalls) servicesSelected.push('ball');
+
+      // Create new booking object strictly adhering to types
       const newBooking: Omit<Booking, 'id'> = {
         courtId: court.id,
         courtName: court.name,
         customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
-        bookingType,
-        selectedDays: bookingType === 'fixed' ? selectedWeekdays.map(d => {
-          const map = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
-          return map[d];
-        }) : undefined,
+        phone: customerPhone.trim(),
+        type: bookingType,
         dates: calculatedDates,
         startTime: startHour,
         endTime: endHour,
-        hasRackets,
-        hasBalls,
-        totalAmount: totalPrice,
-        paymentMethod,
-        notes: notes.trim(),
+        isLightRequired,
+        services: servicesSelected,
         status: 'pending',
-        deviceId,
+        totalAmount: totalPrice,
         createdAt: new Date().toISOString()
       };
 
       // Direct Firestore write using Pure Client SDK Async/Await
-      await addDoc(collection(db, 'bookings'), newBooking);
+      const docRef = await addDoc(collection(db, 'bookings'), newBooking);
+      // Wait, let's update with id as well
+      await updateDoc(docRef, { id: docRef.id, deviceId });
       
       onBookingSuccess();
     } catch (err: any) {
@@ -238,6 +252,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             </div>
           </div>
           <button 
+            type="button"
             onClick={onClose}
             className="p-1.5 hover:bg-indigo-500 rounded-full text-indigo-100 hover:text-white transition-colors cursor-pointer"
             id="btn-close-modal"
@@ -249,7 +264,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
         {/* Modal Content */}
         <div className="flex-grow overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-12 gap-6">
           
-          {/* Left Column: Court Info & Pricing List (No Images as strict guideline) */}
+          {/* Left Column: Court Info & Pricing List (Reference Sidebar) */}
           <div className="md:col-span-4 bg-slate-50 p-5 rounded-2xl border border-slate-100 flex flex-col gap-4">
             <div>
               <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider block mb-1">Thông tin sân</span>
@@ -262,8 +277,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               <div className="flex flex-col gap-2">
                 {pricingOptionsDisplay.map((opt) => (
                   <div key={opt.id} className="flex justify-between items-center bg-white p-2.5 rounded-lg border border-slate-100 shadow-2xs">
-                    <span className="text-xs text-slate-600 font-medium line-clamp-2 pr-1">{opt.label}</span>
-                    <span className="text-xs font-bold text-slate-900 shrink-0">{formatVND(opt.rate)}/h</span>
+                    <span className="text-xs text-slate-600 font-semibold line-clamp-2 pr-1">{opt.label}</span>
+                    <span className="text-xs font-black text-slate-900 shrink-0">{formatVND(opt.rate)}/h</span>
                   </div>
                 ))}
               </div>
@@ -274,11 +289,11 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               <div className="flex flex-col gap-1.5 text-xs text-indigo-900">
                 <div className="flex justify-between">
                   <span>Thuê thêm vợt:</span>
-                  <span className="font-bold">{formatVND(court.services.racketRentPrice)}/lần</span>
+                  <span className="font-bold">{formatVND(court.priceRentalRack)}/buổi</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Rổ bóng tập:</span>
-                  <span className="font-bold">{formatVND(court.services.ballRentPrice)}/lần</span>
+                  <span className="font-bold">{formatVND(court.priceRentalBall)}/buổi</span>
                 </div>
               </div>
             </div>
@@ -292,7 +307,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   className="w-28 h-28 object-contain bg-white p-1 rounded-lg border border-slate-200 shadow-3xs"
                   referrerPolicy="no-referrer"
                 />
-                <span className="text-[10px] text-slate-400 mt-1">Chụp màn hình QR chuyển khoản trước</span>
+                <span className="text-[10px] text-slate-400 mt-1 text-center font-medium leading-tight">Chụp màn hình QR chuyển khoản và đính kèm khi giao dịch</span>
               </div>
             )}
           </div>
@@ -332,10 +347,10 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setBookingType('once')}
+                  onClick={() => setBookingType('retail')}
                   className={`py-3 px-4 rounded-xl border-2 text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                    bookingType === 'once'
-                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                    bookingType === 'retail'
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-bold'
                       : 'border-slate-100 bg-slate-50 text-slate-600 hover:bg-slate-100'
                   }`}
                 >
@@ -347,7 +362,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   onClick={() => setBookingType('fixed')}
                   className={`py-3 px-4 rounded-xl border-2 text-sm font-semibold transition-all flex items-center justify-center gap-2 cursor-pointer ${
                     bookingType === 'fixed'
-                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700 font-bold'
                       : 'border-slate-100 bg-slate-50 text-slate-600 hover:bg-slate-100'
                   }`}
                 >
@@ -358,7 +373,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
             </div>
 
             {/* Date Selection Fields based on Type */}
-            {bookingType === 'once' ? (
+            {bookingType === 'retail' ? (
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Chọn Ngày Đặt Sân</label>
                 <div className="relative">
@@ -425,7 +440,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                     })}
                   </div>
                   {calculatedDates.length > 0 && (
-                    <span className="text-[11px] text-indigo-600 font-medium mt-2 block">
+                    <span className="text-[11px] text-indigo-600 font-semibold mt-2 block">
                       Đã tự động tính: <strong className="font-extrabold">{calculatedDates.length} buổi</strong> khớp lịch.
                     </span>
                   )}
@@ -461,31 +476,31 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 </div>
               </div>
 
-              <div className="bg-indigo-50/50 p-3.5 rounded-xl border border-indigo-100 flex flex-col justify-center">
-                <span className="block text-xs font-bold text-indigo-700 uppercase mb-1.5">Tự động tính khung giờ</span>
-                <div className="flex flex-col gap-1 text-xs text-slate-700">
-                  {calculatedDayHours > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span>Giờ ban ngày:</span>
-                      <span className="font-bold text-slate-900">{calculatedDayHours.toFixed(1).replace('.0', '')}h x {formatVND(court.pricing.dayRate)}/h</span>
-                    </div>
-                  )}
-                  {calculatedNightHours > 0 && (
-                    <div className="flex justify-between items-center">
-                      <span>Giờ có đèn (17h - 22h):</span>
-                      <span className="font-bold text-slate-900">{calculatedNightHours.toFixed(1).replace('.0', '')}h x {formatVND(court.pricing.customLightRate || court.pricing.nightRate || 120000)}/h</span>
-                    </div>
-                  )}
-                  {calculatedDayHours === 0 && calculatedNightHours === 0 && (
-                    <span className="text-[11px] text-slate-400 italic">Nhập giờ chơi hợp lệ để xem chi tiết tính tiền...</span>
-                  )}
+              {/* Active lamp selection (Yêu cầu bật đèn sân) */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60 flex flex-col justify-center gap-1.5">
+                <span className="block text-xs font-bold text-slate-650 uppercase">Tùy chọn đèn chiếu sáng</span>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="checkbox"
+                    id="lightCheckbox"
+                    checked={isLightRequired}
+                    onChange={(e) => setIsLightRequired(e.target.checked)}
+                    className="w-4.5 h-4.5 text-indigo-600 border-slate-350 rounded-sm focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <label htmlFor="lightCheckbox" className="text-xs font-extrabold text-indigo-750 select-none cursor-pointer flex items-center gap-1">
+                    <Zap className="w-3.5 h-3.5 fill-amber-500 stroke-amber-750" />
+                    Yêu cầu bật đèn sân (+tiền chênh lệch)
+                  </label>
                 </div>
+                <p className="text-[10px] text-slate-400 italic">
+                  * Nếu không bật đèn: Tính đồng giá {formatVND(court.priceDay)}/h cả ngày lẫn đêm.
+                </p>
               </div>
             </div>
 
             {/* Extra Services Checklist */}
             <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 flex flex-col gap-3">
-              <span className="text-xs font-bold text-slate-600 uppercase">Dịch vụ sân hỗ trợ thêm</span>
+              <span className="text-xs font-bold text-slate-600 uppercase font-bold">Dịch vụ sân hỗ trợ thêm</span>
               <div className="flex gap-4">
                 <button
                   type="button"
@@ -497,7 +512,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   <CheckSquare className={`w-5 h-5 shrink-0 ${hasRackets ? 'text-indigo-600' : 'text-slate-300'}`} />
                   <div className="text-left">
                     <p className="text-xs font-bold">Thuê thêm vợt</p>
-                    <p className="text-[10px] text-slate-400">+{formatVND(court.services.racketRentPrice)} / buổi / ngày đặt</p>
+                    <p className="text-[10px] text-slate-400">+{formatVND(court.priceRentalRack)} / buổi</p>
                   </div>
                 </button>
 
@@ -511,7 +526,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   <CheckSquare className={`w-5 h-5 shrink-0 ${hasBalls ? 'text-indigo-600' : 'text-slate-300'}`} />
                   <div className="text-left">
                     <p className="text-xs font-bold">Rổ bóng tập</p>
-                    <p className="text-[10px] text-slate-400">+{formatVND(court.services.ballRentPrice)} / buổi / ngày đặt</p>
+                    <p className="text-[10px] text-slate-400">+{formatVND(court.priceRentalBall)} / buổi</p>
                   </div>
                 </button>
               </div>
@@ -525,10 +540,10 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('banking')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
                       paymentMethod === 'banking'
                         ? 'bg-indigo-600 border-indigo-600 text-white'
-                        : 'bg-white border-slate-200 text-slate-600'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
                   >
                     <CreditCard className="w-3.5 h-3.5" />
@@ -537,10 +552,10 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('cash')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
                       paymentMethod === 'cash'
                         ? 'bg-indigo-600 border-indigo-600 text-white'
-                        : 'bg-white border-slate-200 text-slate-600'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                     }`}
                   >
                     Thanh toán trực tiếp
@@ -570,14 +585,14 @@ export const BookingModal: React.FC<BookingModalProps> = ({
 
             <div className="bg-slate-900 text-white p-4 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-3">
               <div className="text-center sm:text-left">
-                <span className="text-xs text-slate-400 block font-medium">Tổng số tiền thanh toán</span>
+                <span className="text-xs text-slate-400 block font-semibold">Tổng số tiền thanh toán ({calculatedDates.length} buổi)</span>
                 <span className="text-xl sm:text-2xl font-black text-amber-400">{formatVND(totalPrice)}</span>
               </div>
 
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 text-white font-bold rounded-xl shadow-md transition-all cursor-pointer text-sm"
+                className="w-full sm:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 text-white font-extrabold rounded-xl shadow-md transition-all cursor-pointer text-sm"
                 id="btn-confirm-booking"
               >
                 {isLoading ? 'Đang gửi yêu cầu...' : 'Xác Nhận Đặt Sân'}

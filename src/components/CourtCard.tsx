@@ -8,31 +8,33 @@ interface CourtCardProps {
 }
 
 export const CourtCard: React.FC<CourtCardProps> = ({ court, onBookNow }) => {
-  const isIndoor = court.type === 'trong_nha';
+  const isIndoor = court.isActive; // or whatever, we can display badge depending on standard properties or if it has "Trong nhà" in its name
 
   // Format currency
   const formatVND = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
   };
 
+  const isIndoorName = court.name.toLowerCase().includes('trong nhà');
+
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col overflow-hidden h-full group" id={`court-card-${court.id}`}>
       {/* Decorative Top Bar reflecting type */}
-      <div className={`h-2 w-full ${isIndoor ? 'bg-indigo-500' : 'bg-amber-500'}`} />
+      <div className={`h-2 w-full ${isIndoorName ? 'bg-indigo-500' : 'bg-amber-500'}`} />
 
       <div className="p-6 flex flex-col flex-grow">
         {/* Court Badges */}
         <div className="flex flex-wrap gap-2 mb-3">
           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-            isIndoor ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
+            isIndoorName ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' : 'bg-amber-50 text-amber-700 border border-amber-100'
           }`}>
-            {isIndoor ? 'Sân Trong Nhà' : 'Sân Ngoài Trời'}
+            {isIndoorName ? 'Sân Trong Nhà' : 'Sân Ngoài Trời'}
           </span>
-          {court.amenities.some(a => a.toLowerCase().includes('mái che')) && (
-            <span className="bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs font-semibold px-2.5 py-1 rounded-full flex items-center gap-1">
-              Có mái che
-            </span>
-          )}
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+            court.isActive ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-100'
+          }`}>
+            {court.isActive ? 'Đang hoạt động' : 'Tạm dừng'}
+          </span>
         </div>
 
         {/* Court Name */}
@@ -46,39 +48,34 @@ export const CourtCard: React.FC<CourtCardProps> = ({ court, onBookNow }) => {
           <span className="line-clamp-2">{court.address}</span>
         </div>
 
-        {/* Amenities List */}
-        <div className="mb-5 bg-slate-50/50 p-3 rounded-xl border border-slate-100/50">
-          <span className="text-xs font-medium text-slate-400 block mb-2 uppercase tracking-wider">Tiện ích sân:</span>
-          <div className="flex flex-col gap-1.5">
-            {court.amenities.map((amenity, idx) => (
-              <div key={idx} className="flex items-center gap-2 text-xs text-slate-600">
-                <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                <span>{amenity}</span>
-              </div>
-            ))}
+        {/* Amenities List / Description */}
+        <div className="mb-5 bg-slate-50/50 p-3 rounded-xl border border-slate-100/50 flex-grow">
+          <span className="text-xs font-medium text-slate-400 block mb-2 uppercase tracking-wider">Mô tả & Tiện ích:</span>
+          <p className="text-xs text-slate-600 mb-3 leading-relaxed">{court.description || 'Không có mô tả chi tiết.'}</p>
+          <div className="flex flex-col gap-1.5 border-t border-slate-200/60 pt-2.5">
+            <div className="flex items-center gap-2 text-xs text-slate-600">
+              <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <span>Giá sàn ngày: {formatVND(court.priceDay)}/h</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-600">
+              <CheckCircle2 className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+              <span>Giá lẻ tối (Có đèn): {formatVND(court.priceRetailNight)}/h</span>
+            </div>
           </div>
         </div>
 
         {/* Pricing Summary */}
-        <div className="mt-auto pt-4 border-t border-slate-100">
-          <span className="text-xs font-medium text-slate-400 block mb-2 uppercase tracking-wider">Bảng giá áp dụng:</span>
+        <div className="pt-4 border-t border-slate-100">
+          <span className="text-xs font-medium text-slate-400 block mb-2 uppercase tracking-wider">Thông tin giá thuê vợt & bóng:</span>
           <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 mb-4">
             <div className="flex flex-col bg-slate-50 p-2 rounded-lg border border-slate-100">
-              <span className="text-slate-400 font-normal">Giờ ngày:</span>
-              <span className="font-bold text-slate-800">{formatVND(court.pricing.dayRate)}/h</span>
+              <span className="text-slate-400 font-normal">Thuê vợt:</span>
+              <span className="font-bold text-slate-800">{formatVND(court.priceRentalRack)}/buổi</span>
             </div>
-
-            {isIndoor ? (
-              <div className="flex flex-col bg-slate-50 p-2 rounded-lg border border-slate-100">
-                <span className="text-slate-400 font-normal">Đèn cố định:</span>
-                <span className="font-bold text-slate-800">{formatVND(court.pricing.fixedLightNight || 100000)}/h</span>
-              </div>
-            ) : (
-              <div className="flex flex-col bg-slate-50 p-2 rounded-lg border border-slate-100">
-                <span className="text-slate-400 font-normal">Giờ tối (Đèn):</span>
-                <span className="font-bold text-slate-800">{formatVND(court.pricing.nightRate)}/h</span>
-              </div>
-            )}
+            <div className="flex flex-col bg-slate-50 p-2 rounded-lg border border-slate-100">
+              <span className="text-slate-400 font-normal">Rổ bóng:</span>
+              <span className="font-bold text-slate-800">{formatVND(court.priceRentalBall)}/buổi</span>
+            </div>
           </div>
 
           <button

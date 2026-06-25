@@ -1,52 +1,37 @@
-export interface CourtPricing {
-  dayRate: number; // h/day time
-  nightRate: number; // h/night time
-  fixedLightDay?: number; // 5h - 17h fixed
-  fixedLightNight?: number; // 17h - 22h fixed
-  customLightRate?: number; // Khách thuê lẻ có đèn
-}
-
 export interface Court {
   id: string;
   name: string;
   address: string;
-  type: 'trong_nha' | 'ngoai_troi';
-  amenities: string[]; // ['Có mái che', 'Có hệ thống chiếu sáng']
-  pricing: CourtPricing;
-  services: {
-    racketRentPrice: number;
-    ballRentPrice: number;
-  };
-  description?: string;
-}
-
-export interface SystemConfig {
-  bankName: string;
-  bankAccount: string;
-  bankOwner: string;
-  qrCodeUrl: string;
-  adminPasswordHash: string; // stored plainly or simple hash for simplicity
-  defaultRacketPrice: number;
-  defaultBallPrice: number;
+  description: string;
+  isActive: boolean;
+  priceDay: number;         // Không dùng đèn (Ban ngày)
+  priceFixedDay: number;    // Có đèn - Cố định (5h - 17h)
+  priceFixedNight: number;  // Có đèn - Cố định (17h - 22h)
+  priceRetailNight: number; // Có đèn - Khách thuê lẻ (17h - 22h)
+  priceRentalRack: number;  // Giá thuê thêm vợt
+  priceRentalBall: number;  // Giá thuê rổ bóng
 }
 
 export interface Booking {
   id: string;
+  customerName: string;
+  phone: string;
   courtId: string;
   courtName: string;
-  customerName: string;
-  customerPhone: string;
-  bookingType: 'once' | 'fixed'; // một lần hoặc cố định
-  selectedDays?: string[]; // e.g. ["Thứ 2", "Thứ 4"] for repeating, or list of actual dates if pre-calculated
-  dates: string[]; // array of ISO strings "YYYY-MM-DD" representing the actual booked dates
-  startTime: string; // e.g., "08:00"
-  endTime: string; // e.g., "10:00"
-  hasRackets: boolean;
-  hasBalls: boolean;
-  totalAmount: number;
-  paymentMethod: 'cash' | 'banking';
-  notes: string;
+  type: 'retail' | 'fixed'; // "retail" (đặt lẻ một lần) hoặc "fixed" (đặt lịch cố định)
+  dates: string[];          // mảng các ngày cụ thể dạng YYYY-MM-DD
+  startTime: string;        // "05:00" -> "22:00"
+  endTime: string;          // "05:00" -> "22:00"
+  isLightRequired: boolean; // Có bật đèn hay không
+  services: ('rack' | 'ball')[]; // mảng chứa "rack", "ball"
   status: 'pending' | 'approved' | 'cancelled';
-  deviceId: string; // device identifier for local history badge accuracy
-  createdAt: string;
+  totalAmount: number;      // Number
+  createdAt?: string;       // Thời gian tạo
+}
+
+export interface SystemConfig {
+  stk: string;              // Số tài khoản ngân hàng
+  bankName: string;         // Tên ngân hàng
+  qrCodeUrl: string;         // Link ảnh QR Code chuyển khoản
+  adminPassword: string;    // Mật khẩu Admin
 }

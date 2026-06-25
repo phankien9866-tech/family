@@ -1,6 +1,6 @@
 import React from 'react';
 import { Booking } from '../types';
-import { Calendar, Clock, Coffee, ShieldAlert, CheckCircle, XCircle } from 'lucide-react';
+import { Calendar, Clock, Coffee, ShieldAlert, CheckCircle, XCircle, Zap } from 'lucide-react';
 
 interface BookingHistoryProps {
   bookings: Booking[];
@@ -54,7 +54,7 @@ export const BookingHistory: React.FC<BookingHistoryProps> = ({ bookings }) => {
         <div>
           <h2 className="text-lg font-bold text-slate-900 uppercase">Lịch sử đặt sân của tôi</h2>
           <p className="text-xs text-slate-500 mt-1">
-            Hiển thị các đơn đặt sân được thực hiện trên thiết bị này.
+            Hiển thị các đơn đặt sân của bạn được lưu trữ trên hệ thống.
           </p>
         </div>
         <span className="bg-indigo-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-3xs">
@@ -66,15 +66,13 @@ export const BookingHistory: React.FC<BookingHistoryProps> = ({ bookings }) => {
         <div className="text-center py-10 bg-slate-50/50 rounded-xl border border-dashed border-slate-200" id="no-history">
           <Calendar className="w-10 h-10 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500 font-medium text-sm">Bạn chưa có lịch đặt sân nào.</p>
-          <p className="text-slate-400 text-xs mt-1">Hãy chọn một sân ở trên và tiến hành đặt ngay!</p>
+          <p className="text-slate-400 text-xs mt-1">Hãy chọn một sân ở ngoài trang chủ và tiến hành đặt ngay!</p>
         </div>
       ) : (
         <div className="flex flex-col gap-4" id="history-list">
           {bookings.map((booking) => {
-            const isFixed = booking.bookingType === 'fixed';
-            
-            // Format grouped dates cleanly
-            const formattedDates = booking.dates.map(d => formatDateVietnamese(d)).join(', ');
+            const isFixed = booking.type === 'fixed';
+            const formattedDates = (booking.dates || []).map(d => formatDateVietnamese(d)).join(', ');
 
             return (
               <div 
@@ -93,7 +91,18 @@ export const BookingHistory: React.FC<BookingHistoryProps> = ({ bookings }) => {
                     }`}>
                       {isFixed ? 'Lịch cố định' : 'Lịch đặt lẻ'}
                     </span>
+                    {booking.isLightRequired && (
+                      <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-sm text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                        <Zap className="w-3 h-3 fill-amber-500 stroke-amber-800" />
+                        Có bật đèn
+                      </span>
+                    )}
                     {getStatusBadge(booking.status)}
+                  </div>
+
+                  {/* Customer Info */}
+                  <div className="text-xs text-slate-600 mb-2">
+                    <span className="font-semibold">Khách hàng:</span> {booking.customerName} ({booking.phone})
                   </div>
 
                   {/* Date & Time with grouped fixed-schedule visualization */}
@@ -106,41 +115,31 @@ export const BookingHistory: React.FC<BookingHistoryProps> = ({ bookings }) => {
                     <div className="flex items-start gap-2">
                       <Calendar className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                       <div className="leading-tight">
-                        <span>Các ngày: </span>
-                        <strong className="text-slate-700 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md inline-block text-[11px] font-semibold mt-0.5">
+                        <span>Các ngày ({booking.dates?.length || 0} buổi): </span>
+                        <strong className="text-slate-700 bg-slate-50 border border-slate-100 px-1.5 py-0.5 rounded-md inline-block text-[11px] font-semibold mt-0.5 break-all">
                           {formattedDates}
                         </strong>
                       </div>
                     </div>
 
-                    {(booking.hasRackets || booking.hasBalls) && (
+                    {booking.services && booking.services.length > 0 && (
                       <div className="flex items-center gap-2 mt-1">
                         <Coffee className="w-4 h-4 text-slate-400 shrink-0" />
                         <span>Dịch vụ: </span>
                         <span className="font-medium text-slate-600">
-                          {[
-                            booking.hasRackets && 'Thuê thêm vợt',
-                            booking.hasBalls && 'Rổ bóng tập'
-                          ].filter(Boolean).join(', ')}
+                          {booking.services.map(s => s === 'rack' ? 'Thuê thêm vợt' : 'Rổ bóng tập').join(', ')}
                         </span>
                       </div>
                     )}
                   </div>
-
-                  {/* Notes if any */}
-                  {booking.notes && (
-                    <p className="text-xs bg-amber-50/50 text-amber-800 border border-amber-100/30 px-3 py-2 rounded-lg italic mt-2">
-                      Ghi chú: {booking.notes}
-                    </p>
-                  )}
                 </div>
 
                 {/* Amount and Payment status side */}
                 <div className="flex flex-col justify-between items-end shrink-0 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100">
                   <div className="text-right">
-                    <span className="text-slate-400 text-xs block font-medium">Hình thức:</span>
+                    <span className="text-slate-400 text-xs block font-medium">Hình thức đơn:</span>
                     <span className="text-xs font-semibold text-slate-700">
-                      {booking.paymentMethod === 'banking' ? 'Chuyển Khoản' : 'Trực tiếp tại sân'}
+                      Yêu cầu duyệt đơn đặt
                     </span>
                   </div>
 
