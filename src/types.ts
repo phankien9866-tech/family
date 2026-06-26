@@ -10,6 +10,7 @@ export interface Court {
   priceRetailNight: number; // Có đèn - Khách thuê lẻ (17h - 22h)
   priceRentalRack: number;  // Giá thuê thêm vợt
   priceRentalBall: number;  // Giá thuê rổ bóng
+  imageUrl?: string;        // Ảnh minh họa tuỳ chỉnh cho sân
 }
 
 export interface Booking {
@@ -34,4 +35,5 @@ export interface SystemConfig {
   bankName: string;         // Tên ngân hàng
   qrCodeUrl: string;         // Link ảnh QR Code chuyển khoản
   adminPassword: string;    // Mật khẩu Admin
+  hotline?: string;         // Số hotline liên hệ
 }

@@ -60,6 +60,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [bankName, setBankName] = useState(systemConfig.bankName || '');
   const [qrCodeUrl, setQrCodeUrl] = useState(systemConfig.qrCodeUrl || '');
   const [adminPassword, setAdminPassword] = useState(systemConfig.adminPassword || '');
+  const [hotline, setHotline] = useState(systemConfig.hotline || '');
+
+  // Court image upload state
+  const [courtImageUrl, setCourtImageUrl] = useState('');
+  const [isCompressingCourtImage, setIsCompressingCourtImage] = useState(false);
+  const [courtImageError, setCourtImageError] = useState('');
 
   // Image upload state
   const [isCompressingQR, setIsCompressingQR] = useState(false);
@@ -146,6 +152,29 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const handleCourtFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsCompressingCourtImage(true);
+    setCourtImageError('');
+
+    try {
+      // Direct compression of potential massive file (e.g. 100MB+)
+      const compressedBase64 = await compressImage(file);
+      setCourtImageUrl(compressedBase64);
+      triggerAlert('success', 'Đã nén và tải lên ảnh minh họa sân thành công!');
+    } catch (err: any) {
+      console.error(err);
+      setCourtImageError(err.message || 'Lỗi khi xử lý hình ảnh.');
+      triggerAlert('error', err.message || 'Lỗi khi xử lý hình ảnh.');
+    } finally {
+      setIsCompressingCourtImage(false);
+      // Reset input value to allow uploading same file again
+      e.target.value = '';
+    }
+  };
+
   // Mutation loader
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [generalLoading, setGeneralLoading] = useState(false);
@@ -157,6 +186,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setBankName(systemConfig.bankName || '');
     setQrCodeUrl(systemConfig.qrCodeUrl || '');
     setAdminPassword(systemConfig.adminPassword || '');
+    setHotline(systemConfig.hotline || '');
   }, [systemConfig]);
 
   const handleAdminLogin = (e: React.FormEvent) => {
@@ -274,6 +304,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   // 4. Mở modal thêm/sửa sân
   const openCourtModal = (court: Court | null = null) => {
+    setCourtImageError('');
     if (court) {
       setEditingCourt(court);
       setCourtFormName(court.name);
@@ -286,6 +317,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setPriceRetailNight(court.priceRetailNight);
       setPriceRentalRack(court.priceRentalRack);
       setPriceRentalBall(court.priceRentalBall);
+      setCourtImageUrl(court.imageUrl || '');
     } else {
       setEditingCourt(null);
       setCourtFormName('');
@@ -298,6 +330,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       setPriceRetailNight(120000);
       setPriceRentalRack(30000);
       setPriceRentalBall(30000);
+      setCourtImageUrl('');
     }
     setIsCourtModalOpen(true);
   };
@@ -322,7 +355,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         priceFixedNight: Number(priceFixedNight),
         priceRetailNight: Number(priceRetailNight),
         priceRentalRack: Number(priceRentalRack),
-        priceRentalBall: Number(priceRentalBall)
+        priceRentalBall: Number(priceRentalBall),
+        imageUrl: courtImageUrl
       };
 
       if (editingCourt) {
@@ -386,7 +420,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         stk: stk.trim(),
         bankName: bankName.trim(),
         qrCodeUrl: finalQrCodeUrl,
-        adminPassword: adminPassword.trim()
+        adminPassword: adminPassword.trim(),
+        hotline: hotline.trim()
       };
 
       await setDoc(doc(db, 'config', 'system'), updatedConfig, { merge: true });
@@ -756,7 +791,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         <form onSubmit={handleSaveSettings} className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 flex flex-col gap-4">
           <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider block border-b border-slate-200 pb-2">Cấu hình thanh toán & Mật khẩu hệ thống</span>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Tên Ngân Hàng <span className="text-red-500">*</span></label>
               <input 
@@ -764,7 +799,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 required
                 value={bankName}
                 onChange={(e) => setBankName(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm bg-white text-slate-800"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm bg-white text-slate-800 focus:outline-hidden focus:border-indigo-500"
               />
             </div>
             <div>
@@ -774,7 +809,18 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 required
                 value={stk}
                 onChange={(e) => setStk(e.target.value)}
-                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm bg-white text-slate-800"
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm bg-white text-slate-800 focus:outline-hidden focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Hotline Liên Hệ <span className="text-red-500">*</span></label>
+              <input 
+                type="text"
+                required
+                placeholder="Ví dụ: 0912.345.678"
+                value={hotline}
+                onChange={(e) => setHotline(e.target.value)}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-xs sm:text-sm bg-white text-slate-800 focus:outline-hidden focus:border-indigo-500"
               />
             </div>
           </div>
@@ -938,6 +984,89 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   onChange={(e) => setCourtFormDescription(e.target.value)}
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white text-slate-800"
                 />
+              </div>
+
+              {/* Custom Court Image Upload / URL */}
+              <div className="border-t border-slate-100 pt-3 flex flex-col gap-2">
+                <label className="block text-xs font-bold text-slate-500 uppercase">Hình ảnh minh họa sân chơi</label>
+                
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 flex flex-col gap-3">
+                  {courtImageUrl ? (
+                    <div className="flex items-center gap-3">
+                      <div className="relative w-20 h-20 bg-slate-100 rounded-lg border border-slate-200 overflow-hidden shrink-0">
+                        <img 
+                          src={courtImageUrl} 
+                          alt="Minh họa sân" 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                        <span className="absolute bottom-1 right-1 bg-indigo-600 text-white text-[8px] font-bold px-1 py-0.5 rounded-sm">
+                          {courtImageUrl.startsWith('data:') ? 'Custom' : 'Link'}
+                        </span>
+                      </div>
+                      <div className="flex-grow min-w-0">
+                        <p className="text-xs font-bold text-slate-700 truncate">
+                          {courtImageUrl.startsWith('data:') ? 'Hình ảnh đã nén tối ưu' : courtImageUrl}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          Sẽ hiển thị làm ảnh bìa của thẻ sân chơi.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCourtImageUrl('')}
+                        className="text-[10px] bg-rose-50 hover:bg-rose-100 text-rose-700 px-2.5 py-1.5 rounded-lg font-bold cursor-pointer transition-all shrink-0"
+                      >
+                        Reset / Xóa ảnh
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bg-amber-50 text-amber-950 p-3 rounded-xl border border-amber-100/50 flex items-start gap-2">
+                      <FileImage className="w-4 h-4 text-amber-600 shrink-0 mt-0.5 animate-pulse" />
+                      <div className="text-[11px] leading-relaxed">
+                        <span className="font-bold">Ảnh mặc định:</span> Sân chơi đang sử dụng ảnh minh họa Pickleball mặc định từ hệ thống.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Drag and Drop and File Select for massive images up to 100MB+ */}
+                  <div className="relative border-2 border-dashed border-slate-250 hover:border-indigo-400 rounded-xl p-4 transition-colors flex flex-col items-center justify-center bg-white">
+                    <input 
+                      type="file"
+                      id="court-file-upload"
+                      accept="image/*"
+                      disabled={isCompressingCourtImage}
+                      onChange={handleCourtFileChange}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                    />
+                    <Upload className="w-6 h-6 text-slate-400 mb-1.5" />
+                    <span className="text-xs font-extrabold text-slate-750 text-center">
+                      {isCompressingCourtImage ? 'Đang nén ảnh kích thước lớn...' : 'Tải lên ảnh minh họa mới cho sân'}
+                    </span>
+                    <span className="text-[9px] text-slate-400 mt-1 text-center font-medium leading-tight">
+                      Hỗ trợ mọi ảnh camera chất lượng cao (kể cả dung lượng lớn &gt;100MB).
+                    </span>
+                  </div>
+
+                  {courtImageError && (
+                    <div className="text-[10px] text-rose-600 font-semibold leading-tight mt-1 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{courtImageError}</span>
+                    </div>
+                  )}
+
+                  {/* Fallback Input link */}
+                  <div className="border-t border-slate-200/60 pt-2">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Hoặc dán link URL ảnh trực tiếp:</label>
+                    <input 
+                      type="text"
+                      placeholder="https://images.unsplash.com/photo-..."
+                      value={courtImageUrl.startsWith('data:') ? '' : courtImageUrl}
+                      onChange={(e) => setCourtImageUrl(e.target.value)}
+                      className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs bg-white text-slate-800 placeholder-slate-350 focus:outline-hidden focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">

@@ -220,7 +220,7 @@ export default function App() {
             </div>
             <div className="text-xs">
               <p className="text-indigo-300 font-bold uppercase">Hotline hỗ trợ gấp</p>
-              <p className="text-base font-black text-white mt-0.5">0912.345.678</p>
+              <p className="text-base font-black text-white mt-0.5">{systemConfig.hotline || '0912.345.678'}</p>
             </div>
           </div>
         </div>

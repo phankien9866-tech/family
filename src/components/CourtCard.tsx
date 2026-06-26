@@ -19,8 +19,26 @@ export const CourtCard: React.FC<CourtCardProps> = ({ court, onBookNow }) => {
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col overflow-hidden h-full group" id={`court-card-${court.id}`}>
+      
+      {/* Court Photo */}
+      <div className="relative h-44 w-full bg-slate-100 overflow-hidden shrink-0">
+        <img 
+          src={court.imageUrl || 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=800&q=80'} 
+          alt={court.name}
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          referrerPolicy="no-referrer"
+        />
+        <div className="absolute top-3 right-3">
+          <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full shadow-xs uppercase tracking-wide ${
+            isIndoorName ? 'bg-indigo-600 text-white' : 'bg-amber-500 text-white'
+          }`}>
+            {isIndoorName ? 'Trong Nhà' : 'Ngoài Trời'}
+          </span>
+        </div>
+      </div>
+
       {/* Decorative Top Bar reflecting type */}
-      <div className={`h-2 w-full ${isIndoorName ? 'bg-indigo-500' : 'bg-amber-500'}`} />
+      <div className={`h-1.5 w-full ${isIndoorName ? 'bg-indigo-500' : 'bg-amber-500'}`} />
 
       <div className="p-6 flex flex-col flex-grow">
         {/* Court Badges */}

@@ -62,7 +62,8 @@ export const DEFAULT_COURTS: Court[] = [
     priceFixedNight: 100000, // Có đèn - Cố định (17h - 22h)
     priceRetailNight: 120000, // Có đèn - Khách thuê lẻ (17h - 22h)
     priceRentalRack: 30000,  // Giá thuê thêm vợt
-    priceRentalBall: 30000   // Giá thuê rổ bóng
+    priceRentalBall: 30000,   // Giá thuê rổ bóng
+    imageUrl: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=800&q=80' // Beautiful pickleball court
   },
   {
     id: 'court-2',
@@ -75,7 +76,8 @@ export const DEFAULT_COURTS: Court[] = [
     priceFixedNight: 100000,
     priceRetailNight: 120000,
     priceRentalRack: 30000,
-    priceRentalBall: 30000
+    priceRentalBall: 30000,
+    imageUrl: 'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&w=800&q=80'
   }
 ];
 
@@ -84,7 +86,8 @@ export const DEFAULT_CONFIG: SystemConfig = {
   stk: '1023456789',
   bankName: 'Vietcombank',
   qrCodeUrl: 'https://img.vietqr.io/image/vietcombank-1023456789-compact2.png?amount=180000&addInfo=Thanh%20toan%20san%20Pickleball',
-  adminPassword: 'admin' // plain admin password as requested
+  adminPassword: 'admin', // plain admin password as requested
+  hotline: '0912345678'
 };
 
 // Seeding helper to guarantee initial data is loaded
