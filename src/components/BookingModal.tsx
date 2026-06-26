@@ -64,7 +64,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     { id: 'priceDay', label: 'Không dùng đèn (Ban ngày)', rate: court.priceDay },
     { id: 'priceFixedDay', label: 'Có đèn - Cố định (5h - 17h)', rate: court.priceFixedDay },
     { id: 'priceFixedNight', label: 'Có đèn - Cố định (17h - 22h)', rate: court.priceFixedNight },
-    { id: 'priceRetailNight', label: 'Có đèn - Khách thuê lẻ (17h - 22h)', rate: court.priceRetailNight }
+    { id: 'priceRetailNight', label: 'Có đèn - Khách thuê lẻ (Mọi khung giờ)', rate: court.priceRetailNight }
   ];
 
   // Generate date list for repeating schedules
@@ -118,14 +118,8 @@ export const BookingModal: React.FC<BookingModalProps> = ({
       } else {
         // NẾU KHÁCH CÓ TÍCH CHỌN BẬT ĐÈN
         if (bookingType === 'retail') {
-          // Khách đặt lẻ một lần:
-          // Trước 18:00 (Ban ngày): áp dụng priceDay
-          // Từ 18:00 trở đi (Ban đêm): áp dụng priceRetailNight
-          if (currentHour < 18) {
-            sessionCost += court.priceDay / 60;
-          } else {
-            sessionCost += court.priceRetailNight / 60;
-          }
+          // Khách đặt lẻ một lần: Có bật đèn thì luôn tính giá priceRetailNight bất kể ngày hay đêm
+          sessionCost += court.priceRetailNight / 60;
         } else {
           // Đặt lịch cố định:
           // Trước 17:00 (Ban ngày): áp dụng priceFixedDay
@@ -493,7 +487,7 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                   </label>
                 </div>
                 <p className="text-[10px] text-slate-400 italic">
-                  * Nếu không bật đèn: Tính đồng giá {formatVND(court.priceDay)}/h cả ngày lẫn đêm.
+                  * Nếu không bật đèn: Tính đồng giá {formatVND(court.priceDay)}/h. Nếu bật đèn: Khách lẻ luôn tính {formatVND(court.priceRetailNight)}/h bất kể ngày hay đêm.
                 </p>
               </div>
             </div>
