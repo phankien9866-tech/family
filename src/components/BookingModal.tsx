@@ -51,7 +51,6 @@ export const BookingModal: React.FC<BookingModalProps> = ({
   // Extra services
   const [hasRackets, setHasRackets] = useState(false);
   const [hasBalls, setHasBalls] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'banking'>('banking');
   const [notes, setNotes] = useState('');
 
   const [calculatedDates, setCalculatedDates] = useState<string[]>([]);
@@ -291,19 +290,6 @@ export const BookingModal: React.FC<BookingModalProps> = ({
                 </div>
               </div>
             </div>
-
-            {paymentMethod === 'banking' && (
-              <div className="mt-auto border-t border-slate-200 pt-3 flex flex-col items-center">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2 self-start">Thanh toán chuyển khoản</span>
-                <img 
-                  src={systemConfig.qrCodeUrl || 'https://img.vietqr.io/image/vietcombank-1023456789-compact2.png'} 
-                  alt="Mã QR Chuyển khoản" 
-                  className="w-28 h-28 object-contain bg-white p-1 rounded-lg border border-slate-200 shadow-3xs"
-                  referrerPolicy="no-referrer"
-                />
-                <span className="text-[10px] text-slate-400 mt-1 text-center font-medium leading-tight">Chụp màn hình QR chuyển khoản và đính kèm khi giao dịch</span>
-              </div>
-            )}
           </div>
 
           {/* Right Column: Interactive Booking Form */}
@@ -526,47 +512,16 @@ export const BookingModal: React.FC<BookingModalProps> = ({
               </div>
             </div>
 
-            {/* Payment & Notes */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Hình thức thanh toán</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('banking')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
-                      paymentMethod === 'banking'
-                        ? 'bg-indigo-600 border-indigo-600 text-white'
-                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    <CreditCard className="w-3.5 h-3.5" />
-                    Chuyển Khoản
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPaymentMethod('cash')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
-                      paymentMethod === 'cash'
-                        ? 'bg-indigo-600 border-indigo-600 text-white'
-                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                    }`}
-                  >
-                    Thanh toán trực tiếp
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Ghi chú bổ sung (nếu có)</label>
-                <textarea 
-                  rows={1}
-                  placeholder="Ví dụ: Cần chuẩn bị sân lúc..."
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl text-xs text-slate-800 bg-white"
-                />
-              </div>
+            {/* Notes */}
+            <div className="w-full">
+              <label className="block text-xs font-bold text-slate-600 uppercase mb-1.5">Ghi chú bổ sung (nếu có)</label>
+              <textarea 
+                rows={2}
+                placeholder="Ví dụ: Cần chuẩn bị thêm nước uống, thời gian nhận sân..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-800 bg-white focus:outline-hidden focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all"
+              />
             </div>
 
             {/* Errors / Sum Area */}
